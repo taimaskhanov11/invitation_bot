@@ -1,0 +1,5 @@
+.idea
+logs
+config_dev.yml
+backup
+sessions
