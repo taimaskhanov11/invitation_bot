@@ -1,5 +1,6 @@
 import argparse
 import datetime
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -52,4 +53,5 @@ I18N_DOMAIN = "invitation_bot"
 LOCALES_DIR = BASE_DIR / "invitation_bot/apps/bot/locales"
 TZ = datetime.timezone(datetime.timedelta(hours=3))
 # config_file = parse_config()
-config = Config(**load_yaml("config.yml"))
+config_file = "config_dev.yml" if os.getenv("DEBUG") else "config.yml"
+config = Config(**load_yaml(config_file))
