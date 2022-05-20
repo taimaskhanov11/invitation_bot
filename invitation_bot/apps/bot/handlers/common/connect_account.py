@@ -9,9 +9,9 @@ from loguru import logger
 from invitation_bot.apps.bot.callback_data.base_callback import AccountCallback, Action
 from invitation_bot.apps.bot.filters.base_filters import UserFilter
 from invitation_bot.apps.bot.markups.common import common_markups
-from invitation_bot.apps.bot.temp import controller_codes_queue
+from invitation_bot.apps.bot.temp import controller_codes_queue, controllers
 from invitation_bot.apps.controller.controller import ConnectAccountController
-from invitation_bot.db.models import User
+from invitation_bot.db.models import User, Account
 from invitation_bot.loader import _
 
 router = Router()
@@ -41,6 +41,12 @@ async def connect_account(call: types.CallbackQuery, state: FSMContext):
 async def connect_account_phone(message: types.Message, user: User, state: FSMContext):
     try:
         api_id, api_hash, phone = tuple(map(lambda x: x.strip(), message.text.split(":")))
+
+        account = await Account.get_or_none(api_id=api_id)
+        if account:
+            await message.answer(_("Этот аккаунт уже подключен"))
+            return
+
         logger.info(f"{user.username}| Полученные данные {api_id}|{api_hash}|{phone}")
         client = ConnectAccountController(
             user_id=user.user_id,
@@ -50,8 +56,9 @@ async def connect_account_phone(message: types.Message, user: User, state: FSMCo
             api_hash=api_hash
         )
         controller_codes_queue[user.user_id] = Queue(maxsize=1)
-        # asyncio.create_task(client.start())
         asyncio.create_task(client.start())
+        controllers[user.user_id][client.api_id] = client
+
         await state.set_state(ConnectAccount.code)
         await message.answer(_("Введите код подтверждения из сообщения Телеграмм с префиксом code, "
                                "в только таком виде code<ваш код>. "

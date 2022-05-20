@@ -9,6 +9,8 @@ class Action(str, Enum):
     current = "current"
     view = "view"
     connect = "connect"
+    delete = "delete"
+    chats = "chats"
 
 
 class UserCallback(CallbackData, prefix="user"):
@@ -18,4 +20,10 @@ class UserCallback(CallbackData, prefix="user"):
 
 class AccountCallback(CallbackData, prefix="account"):
     pk: int
+    action: Action
+
+
+class ChatCallback(CallbackData, prefix="chat", sep="="):
+    account_pk: int
+    id: int
     action: Action

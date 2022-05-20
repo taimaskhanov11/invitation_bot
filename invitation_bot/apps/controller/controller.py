@@ -1,24 +1,59 @@
 import asyncio
+import re
 from asyncio import Queue
 from pathlib import Path
 from typing import Optional
 
+from aiocache import cached
+from aiogram.dispatcher.fsm.storage.base import StorageKey
 from loguru import logger
 from pydantic import BaseModel
 from telethon import TelegramClient, events
-from telethon.tl import patched
+from telethon.errors import FloodWaitError
+from telethon.tl import patched, types, functions
+from telethon.tl.functions.channels import JoinChannelRequest
+from telethon.tl.functions.messages import ImportChatInviteRequest
 
 from invitation_bot.apps.bot import temp
 from invitation_bot.apps.bot.markups.common import common_markups
 from invitation_bot.apps.bot.temp import controller_codes_queue, controllers
-from invitation_bot.db.models.account import Account
+from invitation_bot.db.models import Account
 from invitation_bot.loader import bot, _, storage
 
 SESSION_PATH = Path(Path(__file__).parent, "sessions")
 
 
-class AbstractController(BaseModel):
+class Controller(BaseModel):
+    # todo 5/20/2022 6:24 PM taima: сделать owner_id и тип модели User
     user_id: int
+    phone: str
+    api_id: int
+    api_hash: str
+    path: Optional[Path]
+
+    def __str__(self):
+        return f"{self.phone}[app{self.api_id}]"
+
+    def init(self):
+        logger.debug(f"Инициализация клиента {self}")
+        self.path = Path(SESSION_PATH, f"{self.api_id}_{self.user_id}.session")
+        self.client = TelegramClient(str(self.path), self.api_id, self.api_hash)
+
+    async def start(self):
+        """Создать новый client и запустить"""
+        self.init()
+        logger.debug(f"Контроллер создан")
+        await self.client.connect()
+        # await self.listening()
+
+    async def stop(self):
+        """Приостановить client и удалить"""
+        await self.client.disconnect()
+        del temp.controllers[self.user_id][self.api_id]
+        logger.info(f"Контроллер {self} приостановлен и удален")
+
+
+class MethodController(Controller):
     username: Optional[str]
     client: Optional[TelegramClient]
 
@@ -36,34 +71,21 @@ class AbstractController(BaseModel):
 
         await self.client.run_until_disconnected()
 
+    async def join_channel(self, channel, by="link"):
+        try:
+            if by == "link":
+                await self.client(JoinChannelRequest(channel=channel))
+            else:
+                invite_link = re.findall(r"t\.me/(.+)", channel)[0]
+                await self.client(ImportChatInviteRequest(invite_link))
+        except FloodWaitError as e:
+            return f"Флуд! Ожидание {e.seconds}"
 
-class Controller(AbstractController):
-    phone: str
-    api_id: int
-    api_hash: str
-    path: Optional[Path]
+    # async def get_chats(self) -> messages.Chats:
 
-    def __str__(self):
-        return f"{self.username}[{self.user_id}][app{self.api_id}]"
-
-    def _init(self):
-        logger.debug(f"Инициализация клиента {self}")
-        self.path = Path(SESSION_PATH, f"{self.api_id}_{self.user_id}.session")
-        self.client = TelegramClient(str(self.path), self.api_id, self.api_hash)
-        controllers[self.user_id] = self
-
-    async def start(self):
-        """Создать новый client и запустить"""
-        self._init()
-        logger.debug(f"Контроллер создан")
-        await self.client.connect()
-        # await self.listening()
-
-    async def stop(self):
-        """Приостановить client и удалить"""
-        await self.client.disconnect()
-        del temp.controllers[self.user_id]
-        logger.info(f"Контроллер {self} приостановлен и удален")
+    @cached(60)
+    async def get_chats(self) -> list[types.Chat]:
+        return (await self.client(functions.messages.GetAllChatsRequest(except_ids=[]))).chats
 
 
 class ConnectAccountController(Controller):
@@ -72,13 +94,10 @@ class ConnectAccountController(Controller):
         queue: Queue = controller_codes_queue.get(self.user_id)
         code = await queue.get()
         queue.task_done()
-        del queue
+        del controller_codes_queue[self.user_id]
         return code
 
-    async def clearing(self):
-        await bot.send_message(
-            self.user_id, _("🚫 Ошибка, отмена привязки ... Попробуйте отключить Двухэтапную аутентификацию")
-        )
+    async def clear_temp(self):
         await self.client.disconnect()
         del controllers[self.user_id]
         self.path.unlink()
@@ -94,13 +113,9 @@ class ConnectAccountController(Controller):
             await bot.send_message(
                 self.user_id,
                 "🚫 Ошибка, отмена привязки ...\nПовторите попытку",
-                # reply_markup=markups.common_menu.start_menu(self.user_id),
+                reply_markup=common_markups.start_menu(),
             )
-            await self.client.disconnect()
-            del controllers[self.user_id]
-            self.path.unlink()
-            del controller_codes_queue[self.user_id]
-            logger.info(f"Временные файлы очищены {self}")
+            await self.clear_temp()
 
     async def connect_finished_message(self):
         await self.client.send_message("me", "✅ Бот успешно подключен")
@@ -117,6 +132,11 @@ class ConnectAccountController(Controller):
             lambda: self.phone, password=lambda: self._2auth(), code_callback=lambda: self._get_code()
         )
 
+    async def clear_state(self):
+        key = StorageKey((await bot.get_me()).id, self.user_id, self.user_id)
+        await storage.set_state(bot, key)
+        await storage.set_data(bot, key, {})
+
     async def connect_account(self):
         """Подключение аккаунта и создание сессии"""
         logger.debug(f"Подключение аккаунта {self}")
@@ -124,35 +144,34 @@ class ConnectAccountController(Controller):
             await asyncio.wait_for(self.try_connect(), timeout=30)
         except Exception as e:
             logger.warning(f"Не удалось получить код для подключения {self} {e}")
-            await self.clearing()
+            await bot.send_message(
+                self.user_id, _("🚫 Ошибка, отмена привязки ... Попробуйте отключить Двухэтапную аутентификацию")
+            )
+            await self.clear_temp()
             return
 
-        await storage.set_state(bot, self.user_id)
-        await storage.set_data(bot, self.user_id, {})
-        # await storage.storage.,
-        # todo 5/20/2022 12:45 AM taima:
+        await self.clear_state()
+        account_data: types.User = await self.client.get_me()
+        logger.info(account_data)
+        await Account.connect(self, account_data.to_dict())
         await self.connect_finished_message()
-        # await User.connect_account(self)
-        await Account.connect(self)
-        logger.success(f"Аккаунт пользователя {self} успешно подключен")
 
     async def start(self):
-        self._init()
+        self.init()
         logger.debug(f"Контроллер создан")
         await self.connect_account()
         await self.listening()
 
 
-async def start_controller(acc: Account):
-    acc_data = dict(acc)
-    del acc_data["user_id"]
-    controller = Controller(
-        user_id=acc.user.user_id,
-        username=acc.user.username,
-        **acc_data,
-        # chats={chat.chat_id: chat for chat in acc.chats} or {},
+async def start_controller(account: Account):
+    account_data = dict(account)
+    del account_data["user_id"]
+    controller = MethodController(
+        user_id=account.owner.user_id,
+        **account_data
     )
     asyncio.create_task(controller.start())
+    controllers[controller.user_id][controller.api_id] = controller
     logger.info(f"Контроллер {controller} запущен")
 
 
@@ -169,14 +188,7 @@ async def restart_controller(user):
 
 async def init_controllers():
     logger.debug("Инициализация контролеров")
-    return
-    for acc in await Account.all().prefetch_related(
-            # for acc in await Account.filter(api_id=16629671).prefetch_related(
-            "chats__message_filter__user_filters",
-            "chats__message_filter__word_filter",
-            "chats__chat_storage",
-            "user",
-    ):
+    for acc in await Account.all().select_related("owner"):
         await start_controller(acc)
     logger.info("Контроллеры проинициализированы")
 

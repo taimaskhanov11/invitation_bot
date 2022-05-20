@@ -4,9 +4,10 @@ import logging
 from aiogram import Bot
 from aiogram.types import BotCommand
 
-from invitation_bot.apps.bot.handlers.common import register_common
+from invitation_bot.apps.bot.handlers.common import register_common, register_accounts_manager
 from invitation_bot.apps.bot.handlers.common.connect_account import register_connect_account
 from invitation_bot.apps.bot.handlers.errors.errors_handlers import register_error
+from invitation_bot.apps.controller.controller import init_controllers
 from invitation_bot.config.config import config
 from invitation_bot.config.logg_settings import init_logging
 from invitation_bot.db import init_db
@@ -41,13 +42,15 @@ async def start():
     # Инициализация бд
     await init_db(**config.db.dict())
 
+    await init_controllers()
+
     # Меню админа
 
     # Регистрация хэндлеров
     register_common(dp)
     register_error(dp)
     register_connect_account(dp)
-
+    register_accounts_manager(dp)
     # Регистрация middleware
 
     # Регистрация фильтров
