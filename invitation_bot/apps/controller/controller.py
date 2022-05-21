@@ -8,9 +8,10 @@ from aiocache import cached
 from aiogram.dispatcher.fsm.storage.base import StorageKey
 from loguru import logger
 from pydantic import BaseModel
-from telethon import TelegramClient, events
+from telethon import TelegramClient, helpers
 from telethon.errors import FloodWaitError
-from telethon.tl import patched, types, functions
+from telethon.tl import types, functions
+from telethon.tl.custom import dialog
 from telethon.tl.functions.channels import JoinChannelRequest
 from telethon.tl.functions.messages import ImportChatInviteRequest
 
@@ -45,6 +46,7 @@ class Controller(BaseModel):
         logger.debug(f"Контроллер создан")
         await self.client.connect()
         # await self.listening()
+        # todo 5/21/2022 2:59 AM taima: включить подкючение
 
     async def stop(self):
         """Приостановить client и удалить"""
@@ -60,32 +62,36 @@ class MethodController(Controller):
     class Config:
         arbitrary_types_allowed = True
 
-    async def listening(self):
-        """Прослушка входящих сообщений"""
-        logger.success(f"Прослушивание сообщений {self} запущено")
-
-        @self.client.on(events.NewMessage(incoming=True))
-        async def message_handler(event: events.NewMessage.Event):
-            message: patched.Message = event.message
-            pass
-
-        await self.client.run_until_disconnected()
-
-    async def join_channel(self, channel, by="link"):
+    async def join_channel(self, channel):
         try:
-            if by == "link":
-                await self.client(JoinChannelRequest(channel=channel))
+            channel_hash = re.findall(r"t\.me/\+(.+)", channel)[0]
+            if channel_hash:
+                await self.client(ImportChatInviteRequest(channel_hash[0]))
             else:
-                invite_link = re.findall(r"t\.me/(.+)", channel)[0]
-                await self.client(ImportChatInviteRequest(invite_link))
+                await self.client(JoinChannelRequest(channel=channel))
         except FloodWaitError as e:
             return f"Флуд! Ожидание {e.seconds}"
 
-    # async def get_chats(self) -> messages.Chats:
+    async def send_message(self, entity, text):
+        await self.client.send_message(entity, text)
 
-    @cached(60)
+    # async def get_chats(self) -> messages.Chats:
+    @cached(20)
+    async def get_entity(self, entity):
+        return await self.client.get_entity(entity)
+
+    @cached(20)
     async def get_chats(self) -> list[types.Chat]:
         return (await self.client(functions.messages.GetAllChatsRequest(except_ids=[]))).chats
+
+    @cached(20)
+    async def get_dialogs(self) -> helpers.TotalList[dialog.Dialog]:
+        return await self.client.get_dialogs()
+
+    # todo 5/21/2022 4:57 PM taima: добавить кэш по ключу
+    @cached(60 * 5)
+    async def get_chat_users(self, chat, limit=5000) -> helpers.TotalList[types.User]:
+        return await self.client.get_participants(chat, limit=limit)
 
 
 class ConnectAccountController(Controller):
@@ -154,13 +160,14 @@ class ConnectAccountController(Controller):
         account_data: types.User = await self.client.get_me()
         logger.info(account_data)
         await Account.connect(self, account_data.to_dict())
+        await self.client.disconnect()
         await self.connect_finished_message()
 
     async def start(self):
         self.init()
         logger.debug(f"Контроллер создан")
         await self.connect_account()
-        await self.listening()
+        # await self.listening()
 
 
 async def start_controller(account: Account):

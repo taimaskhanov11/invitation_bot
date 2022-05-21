@@ -14,4 +14,5 @@ dp = Dispatcher(storage=storage)
 # _ = i18n.gettext
 
 
-def _(text): return text
+def _(text):
+    return text

@@ -5,10 +5,10 @@ from invitation_bot.loader import _
 
 def start_menu():
     keyboard = [
-        ((_("👤 Мой профиль"), "profile"),),
-        ((_("👥 Текущие аккаунты"), AccountCallback(pk=0, action=Action.current).pack()),),
-        ((_("👤 Добавить аккаунт"), AccountCallback(pk=0, action=Action.connect).pack()),),
-        ((_("👤 Статистика"), "statistic"),),
+        # ((_("👤 Мой профиль"), "profile"),),
+        ((_("👥 Текущие аккаунты"), AccountCallback(action=Action.current).pack()),),
+        ((_("👤 Добавить аккаунт"), AccountCallback(action=Action.connect).pack()),),
+        # ((_("👤 Статистика"), "statistic"),),
     ]
     return get_inline_keyboard(keyboard)
 

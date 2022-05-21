@@ -2,6 +2,9 @@ from aiogram import types
 from aiogram.dispatcher.filters import BaseFilter
 from loguru import logger
 
+from invitation_bot.apps.bot.callback_data.base_callback import ChatCallback
+from invitation_bot.apps.bot.temp import controllers
+from invitation_bot.apps.controller.controller import MethodController
 from invitation_bot.db.models import User
 
 
@@ -19,4 +22,10 @@ class UserFilter(BaseFilter):
         )
         if is_new:
             logger.info(f"Новый пользователь {user=}")
-        return {"user": user}
+        data = {"user": user}
+        return data
+
+
+class ControllerFilter(BaseFilter):
+    async def __call__(self, update: types.CallbackQuery | types.Message, **kwargs) -> dict[str, MethodController]:
+        return {"controller": controllers[update.from_user.id][ChatCallback.unpack(update.data).controller_id]}

@@ -1,11 +1,17 @@
+import logging
+
 from aiogram import Dispatcher, Router
 from loguru import logger
 
 router = Router()
-
+#
+# log = logging.getLogger()
+#
 
 async def error_handler(update, exception):
-    logger.exception(f"{exception}|{update}")
+    logger.error(f"{exception}|{update}")
+    # log.exception(f"{exception}|{update}")
+    # logging.Logger
     return True
 
 

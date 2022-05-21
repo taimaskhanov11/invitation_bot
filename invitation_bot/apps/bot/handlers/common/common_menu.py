@@ -13,6 +13,7 @@ async def start(message: types.Message | types.CallbackQuery, user: User, state:
     if isinstance(message, types.CallbackQuery):
         message = message.message
     await message.answer("Стартовое меню!", reply_markup=common_markups.start_menu())
+    # await message.answer("|vk.com|", "markdown")
 
 
 def register_common(dp: Dispatcher):
