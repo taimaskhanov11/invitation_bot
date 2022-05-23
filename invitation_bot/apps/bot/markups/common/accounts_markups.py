@@ -9,7 +9,8 @@ from invitation_bot.loader import _
 
 def view_accounts(accounts: list[Account]):
     keyboard = (
-        ((account.first_name, AccountCallback(pk=account.pk, action=Action.view).pack()),) for account in accounts
+        ((f"{account.first_name}[{account.phone}]", AccountCallback(pk=account.pk, action=Action.view).pack()),) for
+        account in accounts
     )
     return get_inline_keyboard(keyboard)
 

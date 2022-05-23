@@ -48,7 +48,8 @@ class Account(AbstractUser):
         user = await User.get(user_id=controller.user_id)
         acc, is_create = await cls.get_or_create(
             owner=user,
-            defaults={**controller.dict(exclude={"user_id", "username"}) |
+            api_id=controller.api_id,
+            defaults={**controller.dict(exclude={"user_id", "username", "api_id"}) |
                         {"user_id": account_data["id"],
                          "username": account_data["username"],
                          "first_name": account_data["first_name"],

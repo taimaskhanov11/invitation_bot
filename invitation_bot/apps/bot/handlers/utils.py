@@ -6,6 +6,7 @@ from aiocache import cached
 from loguru import logger
 from pydantic import BaseModel
 from telethon import helpers, TelegramClient
+from telethon.errors import FloodWaitError, PeerFloodError
 from telethon.tl import types
 
 from invitation_bot.db.models import Account
@@ -74,12 +75,14 @@ class Spammer(BaseModel):
         return change
 
     async def check_chat(self):
+        await self.client.connect()
         # await self.controller.get_entity(self.chat)
         # await self.controller.get_chat_users(self.chat, limit=1)
         await self.get_entity(self.chat)
         await self.get_chat_users(self.chat, limit=1)
 
     async def spam(self):
+        # await self.client.connect()
         users = await self.get_chat_users(self.chat)
         true_users: list[types.User] = random.sample(users, self.count)
         from_ = self.interval[0] - 1
@@ -92,8 +95,17 @@ class Spammer(BaseModel):
                 await self.send_message(u, pre_text)
                 logger.debug(f"{u.first_name}|{pre_text}")
                 self.successfully_sent += 1
+            except FloodWaitError as e:
+                logger.error(e)
+                await bot.send_message(self.user_id,
+                                       f"Аккаунт {self.account.first_name}.\nФлуд повторите попытку через {e.seconds} секунд")
+                break
+            except PeerFloodError as e:
+                logger.warning(e)
+                await bot.send_message(self.user_id,
+                                       f"Аккаунт {self.account.first_name}.\nСлишком много запросов повторите через 15-30 минут")
+                break
             except Exception as e:
                 logger.warning(e)
-
         await bot.send_message(self.user_id, f"Аккаунт {self.account.first_name}.\n"
                                              f"Сообщение успешно отправлено {self.successfully_sent} пользователям")

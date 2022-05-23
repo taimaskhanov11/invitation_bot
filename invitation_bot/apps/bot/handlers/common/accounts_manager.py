@@ -1,5 +1,3 @@
-from pprint import pprint
-
 from aiogram import Dispatcher, Router, types, F
 from aiogram.dispatcher.fsm.context import FSMContext
 from aiogram.dispatcher.fsm.state import StatesGroup, State
@@ -134,7 +132,7 @@ async def spam_chat(message: types.Message, state: FSMContext):
         data = await state.get_data()
         data.update(client=data["controller"].client)
         data.update(user_id=message.from_user.id)
-        pprint(data)
+        logger.debug(data)
         spammer = Spammer(**data)
         await spammer.check_chat()
         await message.answer(_("Спам начался, после окончания придет сообщение о завершении"))

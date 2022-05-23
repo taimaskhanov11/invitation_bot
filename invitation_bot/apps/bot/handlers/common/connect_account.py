@@ -45,6 +45,7 @@ async def connect_account_phone(message: types.Message, user: User, state: FSMCo
         account = await Account.get_or_none(api_id=api_id)
         if account:
             await message.answer(_("Этот аккаунт уже подключен"))
+            await state.clear()
             return
 
         logger.info(f"{user.username}| Полученные данные {api_id}|{api_hash}|{phone}")
@@ -58,7 +59,7 @@ async def connect_account_phone(message: types.Message, user: User, state: FSMCo
         controller_codes_queue[user.user_id] = Queue(maxsize=1)
         asyncio.create_task(client.start())
         controllers[user.user_id][client.api_id] = client
-
+        logger.info(controllers)
         await state.set_state(ConnectAccount.code)
         await message.answer(_("Введите код подтверждения из сообщения Телеграмм с префиксом code, "
                                "в только таком виде code<ваш код>. "

@@ -1,4 +1,5 @@
 import asyncio
+import pprint
 import re
 from asyncio import Queue
 from pathlib import Path
@@ -27,10 +28,15 @@ SESSION_PATH = Path(Path(__file__).parent, "sessions")
 class Controller(BaseModel):
     # todo 5/20/2022 6:24 PM taima: сделать owner_id и тип модели User
     user_id: int
+    username: Optional[str]
     phone: str
     api_id: int
     api_hash: str
     path: Optional[Path]
+    client: Optional[TelegramClient]
+
+    class Config:
+        arbitrary_types_allowed = True
 
     def __str__(self):
         return f"{self.phone}[app{self.api_id}]"
@@ -56,12 +62,6 @@ class Controller(BaseModel):
 
 
 class MethodController(Controller):
-    username: Optional[str]
-    client: Optional[TelegramClient]
-
-    class Config:
-        arbitrary_types_allowed = True
-
     async def join_channel(self, channel):
         try:
             channel_hash = re.findall(r"t\.me/\+(.+)", channel)[0]
@@ -106,7 +106,7 @@ class ConnectAccountController(Controller):
     async def clear_temp(self):
         await self.client.disconnect()
         del controllers[self.user_id]
-        self.path.unlink()
+        self.path.unlink(missing_ok=True)
         del controller_codes_queue[self.user_id]
         logger.info(f"Временные файлы очищены {self}")
 
@@ -160,7 +160,7 @@ class ConnectAccountController(Controller):
         account_data: types.User = await self.client.get_me()
         logger.info(account_data)
         await Account.connect(self, account_data.to_dict())
-        await self.client.disconnect()
+        # await self.client.disconnect()
         await self.connect_finished_message()
 
     async def start(self):
@@ -197,7 +197,8 @@ async def init_controllers():
     logger.debug("Инициализация контролеров")
     for acc in await Account.all().select_related("owner"):
         await start_controller(acc)
-    logger.info("Контроллеры проинициализированы")
+
+    logger.info(f"Контроллеры проинициализированы\n{pprint.pformat(controllers)}")
 
 
 if __name__ == "__main__":
