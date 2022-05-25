@@ -112,7 +112,7 @@ class ConnectAccountController(Controller):
 
     async def get_code(self):
         try:
-            return await asyncio.wait_for(self._get_code(), timeout=30)
+            return await asyncio.wait_for(self._get_code(), timeout=40)
         except Exception as e:
             logger.warning(f"Не удалось получить код для подключения {self} {e}")
             await storage.finish(user=self.user_id)

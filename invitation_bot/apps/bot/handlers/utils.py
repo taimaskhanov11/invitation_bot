@@ -93,6 +93,8 @@ class Spammer(BaseModel):
                 await asyncio.sleep(random_sleep)
                 pre_text = self.prepare_text()
                 await self.send_message(u, pre_text)
+                await bot.send_message(self.user_id,
+                                       f"{self.account.first_name}->Успешно отправлено {u.first_name}[{u.username}]")
                 logger.debug(f"{u.first_name}|{pre_text}")
                 self.successfully_sent += 1
             except FloodWaitError as e:
