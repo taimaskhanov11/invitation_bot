@@ -98,12 +98,12 @@ class Spammer(BaseModel):
                 logger.debug(f"{u.first_name}|{pre_text}")
                 self.successfully_sent += 1
             except FloodWaitError as e:
-                logger.error(e)
+                logger.exception(e)
                 await bot.send_message(self.user_id,
                                        f"Аккаунт {self.account.first_name}.\nФлуд повторите попытку через {e.seconds} секунд")
                 break
             except PeerFloodError as e:
-                logger.warning(e)
+                logger.exception(e)
                 await bot.send_message(self.user_id,
                                        f"Аккаунт {self.account.first_name}.\nСлишком много запросов повторите через 15-30 минут")
                 break
