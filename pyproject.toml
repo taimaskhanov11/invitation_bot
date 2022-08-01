@@ -13,7 +13,7 @@ aiogram = {version = "^3.0.0b3", allow-prereleases = true, extras = ["i18n"]}
 tortoise-orm = {extras = ["asyncpg"], version = "^0.19.0"}
 PyYAML = "^6.0"
 aiocache = "^0.11.1"
-ujson = "^5.3.0"
+ujson = "^5.4.0"
 transliterate = "^1.10.2"
 
 [tool.poetry.dev-dependencies]
